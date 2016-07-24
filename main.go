@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-const tileSize = 32
+const tileSize = 16
 
 func main() {
 	img, err := loadImage("trump.jpg")
@@ -61,7 +61,7 @@ func process(in image.Image) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mosaic(tiler.match, in), nil
+	return mosaic(tiler.imageMatch, in), nil
 }
 
 func roundTo(x, div int) int {
@@ -148,14 +148,91 @@ func (t *Tiler) match(in image.Image) image.Image {
 	return bestFit.image
 }
 
+func (t *Tiler) imageMatch(in image.Image) image.Image {
+	if len(t.images) == 0 {
+		panic("No images loaded into tiler")
+	}
+
+	var (
+		bestFit     = t.images[0]
+		minDistance = imageDistance(in, bestFit.image)
+	)
+	for _, tile := range t.images[1:] {
+		d := imageDistance(in, tile.image)
+		if d < minDistance {
+			bestFit = tile
+			minDistance = d
+		}
+	}
+	return bestFit.image
+}
+
+func imageDistance(x, y image.Image) uint32 {
+	diff := image.NewRGBA(x.Bounds())
+	bounds := x.Bounds()
+
+	numPixels := uint32(bounds.Dx() * bounds.Dy())
+
+	// Compute diff
+	for i := bounds.Min.X; i < bounds.Max.X; i++ {
+		for j := bounds.Min.Y; j < bounds.Max.Y; j++ {
+			xC := x.At(i, j)
+			yC := y.At(i, j)
+
+			diff.Set(i, j, colorDiff(xC, yC))
+		}
+	}
+
+	averageDiff := averageColor(diff)
+	ar, ag, ab, aa := averageDiff.RGBA()
+
+	variance := RGBAColor{}
+
+	// Compute variance
+	for i := bounds.Min.X; i < bounds.Max.X; i++ {
+		for j := bounds.Min.Y; j < bounds.Max.Y; j++ {
+			r, g, b, a := diff.At(i, j).RGBA()
+			variance.r += (r - ar) * (r - ar)
+			variance.g += (g - ag) * (g - ag)
+			variance.b += (b - ab) * (b - ab)
+			variance.a += (a - aa) * (a - aa)
+		}
+	}
+	variance.r /= numPixels
+	variance.g /= numPixels
+	variance.b /= numPixels
+	variance.a /= numPixels
+
+	return colorDistance(variance, color.Black)
+}
+
+func colorDiff(x, y color.Color) color.Color {
+	xr, xg, xb, xa := x.RGBA()
+	yr, yg, yb, ya := y.RGBA()
+
+	return RGBAColor{
+		r: absDiff(xr, yr),
+		g: absDiff(xg, yg),
+		b: absDiff(xb, yb),
+		a: absDiff(xa, ya),
+	}
+}
+
+func absDiff(a, b uint32) uint32 {
+	if a < b {
+		return b - a
+	}
+	return a - b
+}
+
 func colorDistance(x, y color.Color) uint32 {
 	r1, g1, b1, a1 := x.RGBA()
 	r2, g2, b2, a2 := y.RGBA()
 
-	dr := r1 - r2
-	dg := g1 - g2
-	db := b1 - b2
-	da := a1 - a2
+	dr := absDiff(r1, r2)
+	dg := absDiff(g1, g2)
+	db := absDiff(b1, b2)
+	da := absDiff(a1, a2)
 
 	return dr*dr + dg*dg + db*db + da*da
 }

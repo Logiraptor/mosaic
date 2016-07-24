@@ -19,7 +19,7 @@ import (
 
 const numWorkers = 10
 
-var imageSize = image.Rect(0, 0, 32, 32)
+var imageSize = image.Rect(0, 0, 16, 16)
 
 type SubReddit struct {
 	Data struct {
