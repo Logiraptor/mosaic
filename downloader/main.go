@@ -113,6 +113,9 @@ func imageFetcher(work <-chan job, wg *sync.WaitGroup) {
 }
 
 func fetchImage(i int, url string) error {
+	if !strings.HasSuffix(url, ".jpg") {
+		url += ".jpg"
+	}
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
