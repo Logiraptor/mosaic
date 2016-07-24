@@ -9,9 +9,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
-const tileSize = 16
+const tileSize = 32
 
 func main() {
 	img, err := loadImage("trump.jpg")
@@ -24,7 +25,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	out, err := os.Create("output.jpg")
+	out, err := os.Create("output-parallel.jpg")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func process(in image.Image) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	return mosaic(tiler.imageMatch, in), nil
+	return mosaic(tiler.match, in), nil
 }
 
 func roundTo(x, div int) int {
@@ -76,20 +77,25 @@ func mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image 
 
 	output := image.NewRGBA(image.Rect(bounds.Min.X, bounds.Min.Y, width, height))
 
+	var wg sync.WaitGroup
 	for i := bounds.Min.X; i < width; i += tileSize {
 		for j := bounds.Min.Y; j < height; j += tileSize {
-			color := strategy(SubImage{
-				rect:  image.Rect(i, j, i+tileSize, j+tileSize),
-				Image: in,
-			})
-
-			for x := 0; x < tileSize; x++ {
-				for y := 0; y < tileSize; y++ {
-					output.Set(i+x, j+y, color.At(x, y))
+			wg.Add(1)
+			go func(i, j int) {
+				color := strategy(SubImage{
+					rect:  image.Rect(i, j, i+tileSize, j+tileSize),
+					Image: in,
+				})
+				for x := 0; x < tileSize; x++ {
+					for y := 0; y < tileSize; y++ {
+						output.Set(i+x, j+y, color.At(x, y))
+					}
 				}
-			}
+				wg.Done()
+			}(i, j)
 		}
 	}
+	wg.Wait()
 
 	return output
 }
@@ -168,20 +174,10 @@ func (t *Tiler) imageMatch(in image.Image) image.Image {
 }
 
 func imageDistance(x, y image.Image) uint32 {
-	diff := image.NewRGBA(x.Bounds())
 	bounds := x.Bounds()
-
 	numPixels := uint32(bounds.Dx() * bounds.Dy())
 
-	// Compute diff
-	for i := bounds.Min.X; i < bounds.Max.X; i++ {
-		for j := bounds.Min.Y; j < bounds.Max.Y; j++ {
-			xC := x.At(i, j)
-			yC := y.At(i, j)
-
-			diff.Set(i, j, colorDiff(xC, yC))
-		}
-	}
+	diff := imageDiff(x, y)
 
 	averageDiff := averageColor(diff)
 	ar, ag, ab, aa := averageDiff.RGBA()
@@ -204,6 +200,34 @@ func imageDistance(x, y image.Image) uint32 {
 	variance.a /= numPixels
 
 	return colorDistance(variance, color.Black)
+}
+
+func combine(x, y image.Image, f func(x, y int, a, b color.Color)) {
+	xBounds := x.Bounds()
+	yBounds := y.Bounds()
+
+	dx := xBounds.Dx()
+	dy := xBounds.Dy()
+
+	for i := 0; i < dx; i++ {
+		for j := 0; j < dy; j++ {
+			cX := x.At(i+xBounds.Min.X, j+xBounds.Min.Y)
+			cY := y.At(i+yBounds.Min.X, j+yBounds.Min.Y)
+
+			f(i, j, cX, cY)
+		}
+	}
+}
+
+func imageDiff(x, y image.Image) image.Image {
+	diff := image.NewRGBA(x.Bounds().Sub(x.Bounds().Min))
+
+	// Compute diff
+	combine(x, y, func(x, y int, a, b color.Color) {
+		diff.Set(x, y, colorDiff(a, b))
+	})
+
+	return diff
 }
 
 func colorDiff(x, y color.Color) color.Color {
@@ -254,6 +278,7 @@ func averageColor(in image.Image) color.Color {
 
 	numPixels := uint32((bounds.Max.X - bounds.Min.X) * (bounds.Max.Y - bounds.Min.Y))
 	var rSum, gSum, bSum, aSum uint32
+
 	for i := bounds.Min.X; i < bounds.Max.X; i++ {
 		for j := bounds.Min.Y; j < bounds.Max.Y; j++ {
 			color := in.At(i, j)
