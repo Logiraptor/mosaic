@@ -1,21 +1,33 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"image/color"
-	"image/jpeg"
-	_ "image/png"
+	_ "image/jpeg"
+	"image/png"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
+
+	"github.com/Logiraptor/mosaic/downloader"
 )
 
-const tileSize = 32
+var (
+	tileSize *int
+	samples  *int
+	sub      *string
+)
 
 func main() {
-	img, err := loadImage("trump.jpg")
+	samples = flag.Int("samples", 10, "number of images to use in mosaic")
+	sub = flag.String("subreddit", "pics", "which subreddit to pull images from")
+	tileSize = flag.Int("tileSize", 16, "size of mosaic tiles")
+	input := flag.String("input", "trump.jpg", "input file")
+	flag.Parse()
+
+	img, err := loadImage(*input)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,15 +37,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	out, err := os.Create("output-parallel.jpg")
+	out, err := os.Create(fmt.Sprintf("%s-%s.png", *sub, *input))
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = jpeg.Encode(out, after, &jpeg.Options{Quality: 90})
+	err = png.Encode(out, after)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 func loadImage(file string) (image.Image, error) {
@@ -58,7 +69,7 @@ func (s SubImage) Bounds() image.Rectangle {
 }
 
 func process(in image.Image) (image.Image, error) {
-	tiler, err := NewTiler("downloader/images")
+	tiler, err := NewTiler(*sub)
 	if err != nil {
 		return nil, err
 	}
@@ -72,30 +83,24 @@ func roundTo(x, div int) int {
 func mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image {
 	bounds := in.Bounds().Canon()
 
-	width := roundTo(bounds.Max.X-bounds.Min.X, tileSize) + bounds.Min.X
-	height := roundTo(bounds.Max.Y-bounds.Min.Y, tileSize) + bounds.Min.Y
+	width := roundTo(bounds.Max.X-bounds.Min.X, *tileSize) + bounds.Min.X
+	height := roundTo(bounds.Max.Y-bounds.Min.Y, *tileSize) + bounds.Min.Y
 
 	output := image.NewRGBA(image.Rect(bounds.Min.X, bounds.Min.Y, width, height))
 
-	var wg sync.WaitGroup
-	for i := bounds.Min.X; i < width; i += tileSize {
-		for j := bounds.Min.Y; j < height; j += tileSize {
-			wg.Add(1)
-			go func(i, j int) {
-				color := strategy(SubImage{
-					rect:  image.Rect(i, j, i+tileSize, j+tileSize),
-					Image: in,
-				})
-				for x := 0; x < tileSize; x++ {
-					for y := 0; y < tileSize; y++ {
-						output.Set(i+x, j+y, color.At(x, y))
-					}
+	parallelMap(width / *tileSize, step(bounds.Min.X, *tileSize, func(i int) {
+		parallelMap(height / *tileSize, step(bounds.Min.Y, *tileSize, func(j int) {
+			color := strategy(SubImage{
+				rect:  image.Rect(i, j, i+*tileSize, j+*tileSize),
+				Image: in,
+			})
+			for x := 0; x < *tileSize; x++ {
+				for y := 0; y < *tileSize; y++ {
+					output.Set(i+x, j+y, color.At(x, y))
 				}
-				wg.Done()
-			}(i, j)
-		}
-	}
-	wg.Wait()
+			}
+		}))
+	}))
 
 	return output
 }
@@ -109,26 +114,17 @@ type Tile struct {
 	image   image.Image
 }
 
-func NewTiler(dir string) (*Tiler, error) {
+func NewTiler(sub string) (*Tiler, error) {
 	var tiler = new(Tiler)
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		fmt.Println("loading", path)
-		if info.IsDir() {
-			fmt.Println("skipping dir")
-			return nil
-		}
-		img, err := loadImage(path)
-		if err != nil {
-			return err
-		}
+	images, err := downloader.DownloadImages(sub, *samples, *tileSize)
+	if err != nil {
+		return nil, err
+	}
+	for _, img := range images {
 		tiler.images = append(tiler.images, Tile{
 			image:   img,
 			average: averageColor(img),
 		})
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
 	return tiler, nil
 }
@@ -231,14 +227,17 @@ func imageDiff(x, y image.Image) image.Image {
 }
 
 func colorDiff(x, y color.Color) color.Color {
-	xr, xg, xb, xa := x.RGBA()
-	yr, yg, yb, ya := y.RGBA()
+	xr, xg, xb, _ := x.RGBA()
+	yr, yg, yb, _ := y.RGBA()
+
+	xy, xu, xv := color.RGBToYCbCr(uint8(xr>>8), uint8(xg>>8), uint8(xb>>8))
+	yy, yu, yv := color.RGBToYCbCr(uint8(yr>>8), uint8(yg>>8), uint8(yb>>8))
 
 	return RGBAColor{
-		r: absDiff(xr, yr),
-		g: absDiff(xg, yg),
-		b: absDiff(xb, yb),
-		a: absDiff(xa, ya),
+		r: absDiff(uint32(xy), uint32(yy)),
+		g: absDiff(uint32(xu), uint32(yu)),
+		b: absDiff(uint32(xv), uint32(yv)),
+		a: 1,
 	}
 }
 
@@ -250,15 +249,8 @@ func absDiff(a, b uint32) uint32 {
 }
 
 func colorDistance(x, y color.Color) uint32 {
-	r1, g1, b1, a1 := x.RGBA()
-	r2, g2, b2, a2 := y.RGBA()
-
-	dr := absDiff(r1, r2)
-	dg := absDiff(g1, g2)
-	db := absDiff(b1, b2)
-	da := absDiff(a1, a2)
-
-	return dr*dr + dg*dg + db*db + da*da
+	d := colorDiff(x, y).(RGBAColor)
+	return d.r*d.r + d.g*d.g + d.b*d.b + d.a*d.a
 }
 
 type RGBAColor struct {
@@ -296,4 +288,23 @@ func averageColor(in image.Image) color.Color {
 		b: bSum / numPixels,
 		a: aSum / numPixels,
 	}
+}
+
+func step(start, step int, inner func(int)) func(int) {
+	return func(i int) {
+		inner(start + i*step)
+	}
+}
+
+func parallelMap(n int, f func(i int)) {
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			f(i)
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
 }

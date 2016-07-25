@@ -1,25 +1,20 @@
-package main
+package downloader
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
 	"golang.org/x/image/draw"
 
 	"image"
-	"image/jpeg"
 	_ "image/png"
 )
 
 const numWorkers = 10
-
-var imageSize = image.Rect(0, 0, 32, 32)
 
 type SubReddit struct {
 	Data struct {
@@ -34,10 +29,8 @@ type Post struct {
 	}
 }
 
-func main() {
-	n := flag.Int("n", 100, "number of images to download")
-	subreddit := flag.String("subreddit", "pics", "subreddit to scrape")
-	flag.Parse()
+func DownloadImages(subreddit string, n, size int) ([]image.Image, error) {
+	var imageSize = image.Rect(0, 0, size, size)
 
 	var (
 		wg   = new(sync.WaitGroup)
@@ -46,24 +39,26 @@ func main() {
 
 	wg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		go imageFetcher(jobs, wg)
+		go imageFetcher(jobs, wg, imageSize)
 	}
 
-	go loadPages(*subreddit, jobs, *n)
+	images := loadPages(subreddit, jobs, n)
 
 	wg.Wait()
+
+	return images, nil
 }
 
-func loadPages(sub string, jobs chan<- job, total int) {
+func loadPages(sub string, jobs chan<- job, total int) []image.Image {
 	defer close(jobs)
 	var (
 		errs           = make(chan error, numWorkers)
-		success        = make(chan int, numWorkers)
+		success        = make(chan image.Image, numWorkers)
 		posts          []Post
 		submittedCount int
-		errCount       int
-		successCount   int
 		after          string
+
+		images []image.Image
 	)
 
 outer:
@@ -80,69 +75,58 @@ outer:
 			case jobs <- j:
 				submittedCount++
 			case err := <-errs:
-				errCount++
 				fmt.Println("Err:", err)
-			case <-success:
-				successCount++
-				fmt.Printf("%d/%d\n", successCount, total)
-				if successCount >= total {
+			case img := <-success:
+				images = append(images, img)
+				fmt.Printf("%d/%d\n", len(images), total)
+				if len(images) >= total {
 					break outer
 				}
 			}
 		}
 	}
+	return images
 }
 
 type job struct {
 	index   int
 	url     string
 	err     chan error
-	success chan int
+	success chan image.Image
 }
 
-func imageFetcher(work <-chan job, wg *sync.WaitGroup) {
+func imageFetcher(work <-chan job, wg *sync.WaitGroup, imageSize image.Rectangle) {
 	for job := range work {
-		err := fetchImage(job.index, job.url)
+		image, err := fetchImage(job.url)
 		if err != nil {
 			job.err <- err
 		} else {
-			job.success <- job.index
+			job.success <- resize(image, imageSize)
 		}
 	}
 	wg.Done()
 }
 
-func fetchImage(i int, url string) error {
+func fetchImage(url string) (image.Image, error) {
 	if !strings.HasSuffix(url, ".jpg") {
 		url += ".jpg"
 	}
 	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if !strings.Contains(resp.Header.Get("Content-Type"), "image/") {
-		return fmt.Errorf("the response was not an image: %s", resp.Header.Get("Content-Type"))
+		return nil, fmt.Errorf("the response was not an image: %s", resp.Header.Get("Content-Type"))
 	}
-
-	out, err := os.Create(fmt.Sprintf("images/%d.jpg", i))
-	if err != nil {
-		return err
-	}
-	defer out.Close()
 
 	img, _, err := image.Decode(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	output := resize(img)
-	err = jpeg.Encode(out, output, &jpeg.Options{Quality: 90})
-	if err != nil {
-		return err
-	}
-	return nil
+	return img, nil
 }
 
 func loadSubredditPage(subreddit string, after string) ([]Post, string) {
@@ -167,7 +151,7 @@ func loadSubredditPage(subreddit string, after string) ([]Post, string) {
 	return sub.Data.Children, sub.Data.After
 }
 
-func resize(img image.Image) image.Image {
+func resize(img image.Image, imageSize image.Rectangle) image.Image {
 	output := image.NewRGBA(imageSize)
 	draw.BiLinear.Scale(output, imageSize, img, maxSquareInRect(img.Bounds()), draw.Over, nil)
 	return output
