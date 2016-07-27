@@ -31,6 +31,42 @@
 			"path": "golang.org/x/image/math/f64",
 			"revision": "c348254d65821a0aaca538bf5e7774bb522c1dec",
 			"revisionTime": "2016-07-15T23:11:08Z"
+		},
+		{
+			"checksumSHA1": "a27B4Ws9joFhD0IfjzE7ZyWCMQk=",
+			"path": "gopkg.in/bsm/ratelimit.v1",
+			"revision": "bda20d5067a03094fc6762f7ead53027afac5f28",
+			"revisionTime": "2015-04-17T08:12:22Z"
+		},
+		{
+			"checksumSHA1": "dpdsr7XtWPxHxYs1jF7CDG8F6hw=",
+			"path": "gopkg.in/bufio.v1",
+			"revision": "567b2bfa514e796916c4747494d6ff5132a1dfce",
+			"revisionTime": "2014-06-18T13:21:51Z"
+		},
+		{
+			"checksumSHA1": "pHPv9KnzaW8OEc78LO3noJM/HUU=",
+			"path": "gopkg.in/go-redis/cache.v3",
+			"revision": "313857ce218310c8135af1c3f9762cd6dd50df4d",
+			"revisionTime": "2016-04-11T11:21:37Z"
+		},
+		{
+			"checksumSHA1": "E3zBEnaHkLfwTW46K7Yp7cGSgL8=",
+			"path": "gopkg.in/go-redis/cache.v3/lrucache",
+			"revision": "313857ce218310c8135af1c3f9762cd6dd50df4d",
+			"revisionTime": "2016-04-11T11:21:37Z"
+		},
+		{
+			"checksumSHA1": "08PYudqOIpw5YjvikKYU1sZCDvs=",
+			"path": "gopkg.in/redis.v3",
+			"revision": "fc28d0fa245616be3aa97e162086e71c75c92f6b",
+			"revisionTime": "2015-07-25T06:29:23Z"
+		},
+		{
+			"checksumSHA1": "tNI/mAuqqQqfYU4vuJghUroIts4=",
+			"path": "gopkg.in/redis.v3/internal/consistenthash",
+			"revision": "fc28d0fa245616be3aa97e162086e71c75c92f6b",
+			"revisionTime": "2015-07-25T06:29:23Z"
 		}
 	],
 	"rootPath": "github.com/Logiraptor/mosaic"
