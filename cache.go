@@ -63,6 +63,7 @@ func (r *redisCache) LoadImage(url string) (image.Image, error) {
 			Key:    url,
 			Object: img,
 		})
+		return img, nil
 	}
 	return image, nil
 }
