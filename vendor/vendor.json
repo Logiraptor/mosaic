@@ -1,0 +1,25 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "6dBGs12q47cp/koB8gpr0YYt3NQ=",
+			"path": "github.com/gorilla/schema",
+			"revision": "ad8849d14e5cdf1f4423b1f0fc53827ebbdd7477",
+			"revisionTime": "2014-09-09T17:15:14Z"
+		},
+		{
+			"checksumSHA1": "7E3Y1HU/UbsQF/dxMRdjFmx9QDQ=",
+			"path": "golang.org/x/image/draw",
+			"revision": "c348254d65821a0aaca538bf5e7774bb522c1dec",
+			"revisionTime": "2016-07-15T23:11:08Z"
+		},
+		{
+			"checksumSHA1": "o7VkCGBiKM5HXzVzrIci1YDlpvc=",
+			"path": "golang.org/x/image/math/f64",
+			"revision": "c348254d65821a0aaca538bf5e7774bb522c1dec",
+			"revisionTime": "2016-07-15T23:11:08Z"
+		}
+	],
+	"rootPath": "github.com/Logiraptor/mosaic"
+}
