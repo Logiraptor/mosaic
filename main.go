@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image"
 	_ "image/jpeg"
 	"image/png"
@@ -17,7 +16,9 @@ func main() {
 	if port == "" {
 		port = "3000"
 	}
-	http.HandleFunc("/generate", generateHandler)
+	http.Handle("/generate", &MosaicGenerator{
+		ImageLoader: webImageLoader{},
+	})
 	http.Handle("/", http.FileServer(http.Dir("public")))
 	http.ListenAndServe(":"+port, nil)
 }
@@ -28,7 +29,11 @@ type imageConfig struct {
 	InputImageURL        string
 }
 
-func generateHandler(rw http.ResponseWriter, req *http.Request) {
+type MosaicGenerator struct {
+	ImageLoader
+}
+
+func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	var config imageConfig
 	req.ParseForm()
 	err := schema.NewDecoder().Decode(&config, req.Form)
@@ -37,12 +42,12 @@ func generateHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	img, err := loadImage(config.InputImageURL)
+	img, err := m.LoadImage(config.InputImageURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	after, err := config.process(img)
+	after, err := m.process(config, img)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,20 +56,6 @@ func generateHandler(rw http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func loadImage(file string) (image.Image, error) {
-	resp, err := http.Get(file)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	img, _, err := image.Decode(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %v", file, err)
-	}
-	return img, nil
 }
 
 type SubImage struct {
@@ -76,8 +67,13 @@ func (s SubImage) Bounds() image.Rectangle {
 	return s.rect
 }
 
-func (c *imageConfig) process(in image.Image) (image.Image, error) {
-	tiler, err := NewTiler(*c)
+func (m *MosaicGenerator) process(c imageConfig, in image.Image) (image.Image, error) {
+	images, err := DownloadImages(m.ImageLoader, c.TileSourceSubreddit, c.NumSamples, c.TileSize)
+	if err != nil {
+		return nil, err
+	}
+
+	tiler, err := NewTiler(images)
 	if err != nil {
 		return nil, err
 	}

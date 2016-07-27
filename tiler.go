@@ -3,8 +3,6 @@ package main
 import (
 	"image"
 	"image/color"
-
-	"github.com/Logiraptor/mosaic/downloader"
 )
 
 type Tiler struct {
@@ -16,12 +14,8 @@ type Tile struct {
 	image   image.Image
 }
 
-func NewTiler(c imageConfig) (*Tiler, error) {
+func NewTiler(images []image.Image) (*Tiler, error) {
 	var tiler = new(Tiler)
-	images, err := downloader.DownloadImages(c.TileSourceSubreddit, c.NumSamples, c.TileSize)
-	if err != nil {
-		return nil, err
-	}
 	for _, img := range images {
 		tiler.images = append(tiler.images, Tile{
 			image:   img,
