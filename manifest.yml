@@ -1,0 +1,5 @@
+---
+applications:
+ - name: mosaic
+   memory: 1G
+   buildpack: go_buildpack
