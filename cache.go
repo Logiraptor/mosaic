@@ -1,69 +1,36 @@
 package main
 
 import (
-	"bytes"
 	"log"
+	"time"
 
-	"gopkg.in/go-redis/cache.v3"
-	"gopkg.in/redis.v3"
+	"gopkg.in/go-redis/cache.v3/lrucache"
 
 	"image"
-	"image/png"
-	"strconv"
 )
 
 type redisCache struct {
-	codec    *cache.Codec
+	codec    *lrucache.Cache
 	fallback ImageLoader
 }
 
-func NewRedisCache(creds Credentials, fallback ImageLoader) *redisCache {
-	ring := redis.NewClient(&redis.Options{
-		Addr:     creds.Host + ":" + strconv.Itoa(creds.Port),
-		Password: creds.Password,
-	})
-
-	codec := &cache.Codec{
-		Redis: ring,
-
-		Marshal: func(v interface{}) ([]byte, error) {
-			var buf bytes.Buffer
-			err := png.Encode(&buf, v.(image.Image))
-			if err != nil {
-				return nil, err
-			}
-			return buf.Bytes(), nil
-		},
-		Unmarshal: func(b []byte, v interface{}) error {
-			img, _, err := image.Decode(bytes.NewBuffer(b))
-			if err != nil {
-				return err
-			}
-			*(v.(*image.Image)) = img
-			return nil
-		},
-	}
-
+func NewRedisCache(fallback ImageLoader) *redisCache {
 	return &redisCache{
-		codec:    codec,
+		codec:    lrucache.New(time.Hour, 1000),
 		fallback: fallback,
 	}
 }
 
 func (r *redisCache) LoadImage(url string) (image.Image, error) {
-	var image image.Image
-	err := r.codec.Get(url, &image)
-	if err != nil {
-		log.Println("Cache error:", err.Error())
+	img, ok := r.codec.Get(url)
+	if !ok {
+		log.Println("Cache miss:", url)
 		img, err := r.fallback.LoadImage(url)
 		if err != nil {
 			return nil, err
 		}
-		r.codec.Set(&cache.Item{
-			Key:    url,
-			Object: img,
-		})
+		r.codec.Set(url, img)
 		return img, nil
 	}
-	return image, nil
+	return img.(image.Image), nil
 }

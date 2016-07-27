@@ -39,16 +39,8 @@ func main() {
 		port = "3000"
 	}
 
-	var imageLoader ImageLoader
-	vcap, err := readVcap(os.Getenv("VCAP_SERVICES"))
-	if err == nil && len(vcap.Redis) > 0 {
-		imageLoader = NewRedisCache(vcap.Redis[0].Credentials, webImageLoader{})
-	} else {
-		imageLoader = webImageLoader{}
-	}
-
 	http.Handle("/generate", &MosaicGenerator{
-		ImageLoader: imageLoader,
+		ImageLoader: NewRedisCache(webImageLoader{}),
 	})
 	http.Handle("/", http.FileServer(http.Dir("public")))
 	http.ListenAndServe(":"+port, nil)
