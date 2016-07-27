@@ -3,6 +3,18 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "g4Af/FxuzfVeg0lE/yyuUAg9gw0=",
+			"path": "github.com/Logiraptor/mosaic",
+			"revision": "0f654478e5d313e73b1d36fa94987bcb8ebf6719",
+			"revisionTime": "2016-07-27T02:46:30Z"
+		},
+		{
+			"checksumSHA1": "BwBpygU0W3BbjFtPijtWT3j71SU=",
+			"path": "github.com/Logiraptor/mosaic/downloader",
+			"revision": "0f654478e5d313e73b1d36fa94987bcb8ebf6719",
+			"revisionTime": "2016-07-27T02:46:30Z"
+		},
+		{
 			"checksumSHA1": "6dBGs12q47cp/koB8gpr0YYt3NQ=",
 			"path": "github.com/gorilla/schema",
 			"revision": "ad8849d14e5cdf1f4423b1f0fc53827ebbdd7477",

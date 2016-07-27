@@ -2,4 +2,6 @@
 applications:
  - name: mosaic
    memory: 1G
-   buildpack: go_buildpack
+   buildpack: https://github.com/cloudfoundry/go-buildpack
+   env:
+      GOPACKAGENAME: main
