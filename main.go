@@ -39,9 +39,12 @@ func main() {
 		port = "3000"
 	}
 
+	cache := NewRedisCache(webImageLoader{})
+
 	http.Handle("/generate", &MosaicGenerator{
-		ImageLoader: NewRedisCache(webImageLoader{}),
+		ImageLoader: cache,
 	})
+	http.Handle("/cached", cache)
 	http.Handle("/", http.FileServer(http.Dir("public")))
 	http.ListenAndServe(":"+port, nil)
 }

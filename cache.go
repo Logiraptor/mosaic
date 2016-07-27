@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"gopkg.in/go-redis/cache.v3/lrucache"
@@ -33,4 +35,8 @@ func (r *redisCache) LoadImage(url string) (image.Image, error) {
 		return img, nil
 	}
 	return img.(image.Image), nil
+}
+
+func (r *redisCache) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(rw, "%d/%d Cached", r.codec.Len(), 1000)
 }
