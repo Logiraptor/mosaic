@@ -1,23 +1,54 @@
 package main
 
 import (
+	"encoding/json"
 	"image"
 	_ "image/jpeg"
 	"image/png"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gorilla/schema"
 )
+
+type Credentials struct {
+	Host     string
+	Password string
+	Port     int
+}
+
+type Service struct {
+	Credentials Credentials
+}
+
+type VCapServices struct {
+	Redis []Service `json:"p-redis"`
+}
+
+func readVcap(vcapServices string) (VCapServices, error) {
+	var vcap VCapServices
+	err := json.NewDecoder(strings.NewReader(vcapServices)).Decode(&vcap)
+	return vcap, err
+}
 
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
 	}
+
+	var imageLoader ImageLoader
+	vcap, err := readVcap(os.Getenv("VCAP_SERVICES"))
+	if err == nil && len(vcap.Redis) > 0 {
+		imageLoader = NewRedisCache(vcap.Redis[0].Credentials, webImageLoader{})
+	} else {
+		imageLoader = webImageLoader{}
+	}
+
 	http.Handle("/generate", &MosaicGenerator{
-		ImageLoader: webImageLoader{},
+		ImageLoader: imageLoader,
 	})
 	http.Handle("/", http.FileServer(http.Dir("public")))
 	http.ListenAndServe(":"+port, nil)
