@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/schema"
 
 	_ "expvar"
-	
+
 	"fmt"
 )
 
@@ -50,10 +50,10 @@ func main() {
 	})
 	http.Handle("/cached", cache)
 	http.Handle("/", http.FileServer(http.Dir("public")))
-	http.ListenAndServe(":"+port, nil)
+	log.Println(http.ListenAndServe(":"+port, nil))
 }
 
-type imageConfig struct {
+type ImageConfig struct {
 	SampleSize           int
 	NumSamples, TileSize int
 	TileSourceSubreddit  string
@@ -70,7 +70,7 @@ func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			fmt.Fprintf(rw, "panic: %v", r)
 		}
 	}()
-	var config imageConfig
+	var config ImageConfig
 	req.ParseForm()
 	err := schema.NewDecoder().Decode(&config, req.Form)
 	if err != nil {
@@ -117,7 +117,7 @@ func (s SubImage) Bounds() image.Rectangle {
 	return s.rect
 }
 
-func (m *MosaicGenerator) process(c imageConfig, in image.Image) (image.Image, error) {
+func (m *MosaicGenerator) process(c ImageConfig, in image.Image) (image.Image, error) {
 	images, err := DownloadImages(m.ImageLoader, c.TileSourceSubreddit, c.NumSamples, c.TileSize)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (m *MosaicGenerator) process(c imageConfig, in image.Image) (image.Image, e
 	return c.mosaic(tiler.match, in), nil
 }
 
-func (c *imageConfig) mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image {
+func (c *ImageConfig) mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image {
 
 	in = cropToMultiple(in, c.SampleSize)
 	bounds := in.Bounds().Canon()
