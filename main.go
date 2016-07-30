@@ -11,6 +11,10 @@ import (
 	"strings"
 
 	"github.com/gorilla/schema"
+
+	_ "expvar"
+	
+	"fmt"
 )
 
 type Credentials struct {
@@ -34,7 +38,6 @@ func readVcap(vcapServices string) (VCapServices, error) {
 }
 
 func main() {
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
@@ -51,6 +54,7 @@ func main() {
 }
 
 type imageConfig struct {
+	SampleSize           int
 	NumSamples, TileSize int
 	TileSourceSubreddit  string
 	InputImageURL        string
@@ -61,6 +65,11 @@ type MosaicGenerator struct {
 }
 
 func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(rw, "panic: %v", r)
+		}
+	}()
 	var config imageConfig
 	req.ParseForm()
 	err := schema.NewDecoder().Decode(&config, req.Form)
@@ -74,6 +83,13 @@ func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		log.Fatal(err)
 	}
 
+	config.TileSize = 25
+
+	idealTileWidth := float32(config.TileSize * 150)
+	maxDim := float32(max(img.Bounds().Dx(), img.Bounds().Dy()))
+
+	config.SampleSize = int((maxDim / idealTileWidth) * float32(config.TileSize))
+
 	after, err := m.process(config, img)
 	if err != nil {
 		log.Fatal(err)
@@ -83,6 +99,13 @@ func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
 }
 
 type SubImage struct {
@@ -107,31 +130,56 @@ func (m *MosaicGenerator) process(c imageConfig, in image.Image) (image.Image, e
 	return c.mosaic(tiler.match, in), nil
 }
 
+func (c *imageConfig) mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image {
+
+	in = cropToMultiple(in, c.SampleSize)
+	bounds := in.Bounds().Canon()
+
+	numTilesX := bounds.Dx() / c.SampleSize
+	numTilesY := bounds.Dy() / c.SampleSize
+
+	output := image.NewRGBA(image.Rect(0, 0, numTilesX*c.TileSize, numTilesY*c.TileSize))
+
+	parallelMap(numTilesX, func(i int) {
+		parallelMap(numTilesY, func(j int) {
+
+			result := strategy(SubImage{
+				rect: image.Rect(
+					i*c.SampleSize, j*c.SampleSize,
+					i*c.SampleSize+c.SampleSize, j*c.SampleSize+c.SampleSize,
+				),
+				Image: in,
+			})
+
+			for x := 0; x < c.TileSize; x++ {
+				for y := 0; y < c.TileSize; y++ {
+
+					pX := i*c.TileSize + x
+					pY := j*c.TileSize + y
+
+					output.Set(pX, pY, result.At(x, y))
+				}
+			}
+		})
+	})
+
+	return output
+}
+
+func cropToMultiple(img image.Image, tileSize int) image.Image {
+	min := img.Bounds().Min
+	width := roundTo(img.Bounds().Dx(), tileSize)
+	height := roundTo(img.Bounds().Dy(), tileSize)
+	return crop(img, image.Rect(min.X, min.Y, width+min.X, height+min.Y))
+}
+
 func roundTo(x, div int) int {
 	return (x / div) * div
 }
 
-func (c *imageConfig) mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image {
-	bounds := in.Bounds().Canon()
-
-	width := roundTo(bounds.Max.X-bounds.Min.X, c.TileSize) + bounds.Min.X
-	height := roundTo(bounds.Max.Y-bounds.Min.Y, c.TileSize) + bounds.Min.Y
-
-	output := image.NewRGBA(image.Rect(bounds.Min.X, bounds.Min.Y, width, height))
-
-	parallelMap(width/c.TileSize, step(bounds.Min.X, c.TileSize, func(i int) {
-		parallelMap(height/c.TileSize, step(bounds.Min.Y, c.TileSize, func(j int) {
-			color := strategy(SubImage{
-				rect:  image.Rect(i, j, i+c.TileSize, j+c.TileSize),
-				Image: in,
-			})
-			for x := 0; x < c.TileSize; x++ {
-				for y := 0; y < c.TileSize; y++ {
-					output.Set(i+x, j+y, color.At(x, y))
-				}
-			}
-		}))
-	}))
-
-	return output
+func crop(img image.Image, rect image.Rectangle) image.Image {
+	return SubImage{
+		Image: img,
+		rect:  rect,
+	}
 }
