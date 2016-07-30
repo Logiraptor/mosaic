@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
+	"regexp"
 	"sync"
 
 	"golang.org/x/image/draw"
@@ -17,16 +17,13 @@ import (
 const numWorkers = 10
 
 type SubReddit struct {
-	Data struct {
-		Children []Post
-		After    string
-	}
+	Data    []Post
+	Success bool
+	Status  int
 }
 
 type Post struct {
-	Data struct {
-		Url string
-	}
+	Link string
 }
 
 func DownloadImages(imageLoader ImageLoader, subreddit string, n, size int) ([]image.Image, error) {
@@ -64,18 +61,19 @@ func (r *redditDownloader) loadPages(sub string, jobs chan<- job, total int) []i
 		success        = make(chan image.Image, numWorkers)
 		posts          []Post
 		submittedCount int
-		after          string
+		page           int
 
 		images []image.Image
 	)
 
 outer:
 	for {
-		posts, after = r.loadSubredditPage(sub, after)
+		posts = r.loadSubredditPage(sub, page)
+		page++
 		for _, p := range posts {
 			j := job{
 				index:   submittedCount,
-				url:     p.Data.Url,
+				url:     p.Link,
 				err:     errs,
 				success: success,
 			}
@@ -116,19 +114,19 @@ func (r *redditDownloader) imageFetcher(work <-chan job, wg *sync.WaitGroup, ima
 }
 
 func (r *redditDownloader) fetchImage(url string) (image.Image, error) {
-	if !strings.HasSuffix(url, ".jpg") {
-		url += ".jpg"
-	}
+	ending := regexp.MustCompile(`\.([a-z]{3})$`)
+	url = ending.ReplaceAllString(url, "s.$1")
+
 	return r.imageLoader.LoadImage(url)
 }
 
-func (r *redditDownloader) loadSubredditPage(subreddit string, after string) ([]Post, string) {
-	req, err := http.NewRequest("GET", "https://www.reddit.com/r/"+subreddit+".json?after="+after, nil)
+func (r *redditDownloader) loadSubredditPage(subreddit string, page int) []Post {
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.imgur.com/3/gallery/r/%s/top/%d.json", subreddit, page), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	req.Header.Set("User-Agent", "linux:mosaic-photos:0.0.1 (by /u/Logiraptorr)")
+	req.Header.Set("Authorization", "Client-ID f6f766ba6e42aa6")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
@@ -141,7 +139,7 @@ func (r *redditDownloader) loadSubredditPage(subreddit string, after string) ([]
 		log.Fatal(err)
 	}
 
-	return sub.Data.Children, sub.Data.After
+	return sub.Data
 }
 
 func resize(img image.Image, imageSize image.Rectangle) image.Image {

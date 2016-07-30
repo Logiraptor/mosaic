@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/davecheney/profile"
+
 	"github.com/gorilla/schema"
 )
 
@@ -34,6 +36,7 @@ func readVcap(vcapServices string) (VCapServices, error) {
 }
 
 func main() {
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
@@ -60,6 +63,7 @@ type MosaicGenerator struct {
 }
 
 func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	defer profile.Start(profile.MemProfile).Stop()
 	var config imageConfig
 	req.ParseForm()
 	err := schema.NewDecoder().Decode(&config, req.Form)
