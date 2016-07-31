@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"html/template"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	"image/png"
 	"log"
@@ -16,6 +18,12 @@ import (
 
 	"fmt"
 )
+
+var tmpls *template.Template
+
+func init() {
+	tmpls = template.Must(template.ParseGlob("template/*"))
+}
 
 type Credentials struct {
 	Host     string
@@ -49,8 +57,15 @@ func main() {
 		ImageLoader: cache,
 	})
 	http.Handle("/cached", cache)
-	http.Handle("/", http.FileServer(http.Dir("public")))
+	http.Handle("/static/", http.StripPrefix("/static", http.FileServer(http.Dir("public"))))
+	http.HandleFunc("/", indexHandler)
 	log.Println(http.ListenAndServe(":"+port, nil))
+}
+
+func indexHandler(rw http.ResponseWriter, req *http.Request) {
+	tmpls.ExecuteTemplate(rw, "index.html", map[string]interface{}{
+		"Host": os.Getenv("APP_URL"),
+	})
 }
 
 type ImageConfig struct {
@@ -133,7 +148,7 @@ func (m *MosaicGenerator) process(c ImageConfig, in image.Image) (image.Image, e
 	return c.mosaic(tiler.match, in), nil
 }
 
-func (c *ImageConfig) mosaic(strategy func(image.Image) image.Image, in image.Image) image.Image {
+func (c *ImageConfig) mosaic(strategy func(color.Color) image.Image, in image.Image) image.Image {
 
 	in = cropToMultiple(in, c.SampleSize)
 	bounds := in.Bounds().Canon()
@@ -141,18 +156,14 @@ func (c *ImageConfig) mosaic(strategy func(image.Image) image.Image, in image.Im
 	numTilesX := bounds.Dx() / c.SampleSize
 	numTilesY := bounds.Dy() / c.SampleSize
 
+	in = resize(in, image.Rect(0, 0, numTilesX, numTilesY))
+
 	output := image.NewRGBA(image.Rect(0, 0, numTilesX*c.TileSize, numTilesY*c.TileSize))
 
 	parallelMap(numTilesX, func(i int) {
 		parallelMap(numTilesY, func(j int) {
 
-			result := strategy(SubImage{
-				rect: image.Rect(
-					i*c.SampleSize, j*c.SampleSize,
-					i*c.SampleSize+c.SampleSize, j*c.SampleSize+c.SampleSize,
-				),
-				Image: in,
-			})
+			result := strategy(in.At(i, j))
 
 			for x := 0; x < c.TileSize; x++ {
 				for y := 0; y < c.TileSize; y++ {

@@ -1,0 +1,25 @@
+<html>
+<head>
+	<style>
+		label {
+			width: 200px;
+			display: inline-block;
+		}
+	</style>
+</head>
+<body>
+	<form action="/generate">
+			<label for="NumSamples">Samples</label>
+			<input type="number" name="NumSamples" value="10">
+			<br>
+			<label for="InputImageURL">Input</label>
+			<input type="text" name="InputImageURL" value="{{.Host}}/static/cat.jpg">
+			<br>
+			<label for="TileSourceSubreddit">Subreddit</label>
+			<input type="text" name="TileSourceSubreddit" value="aww">
+			<br>
+		<input type="submit">
+	</form>
+	
+</body>
+</html>

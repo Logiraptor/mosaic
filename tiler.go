@@ -25,19 +25,17 @@ func NewTiler(images []image.Image) (*Tiler, error) {
 	return tiler, nil
 }
 
-func (t *Tiler) match(in image.Image) image.Image {
-	average := averageColor(in)
-
+func (t *Tiler) match(in color.Color) image.Image {
 	if len(t.images) == 0 {
 		panic("No images loaded into tiler")
 	}
 
 	var (
 		bestFit     = t.images[0]
-		minDistance = colorDistance(average, bestFit.average)
+		minDistance = colorDistance(in, bestFit.average)
 	)
 	for _, tile := range t.images[1:] {
-		d := colorDistance(tile.average, average)
+		d := colorDistance(tile.average, in)
 		if d < minDistance {
 			bestFit = tile
 			minDistance = d

@@ -1,7 +1,8 @@
 ---
 applications:
  - name: mosaic
-   memory: 1G
+   memory: 2G
    buildpack: https://github.com/cloudfoundry/go-buildpack
    env:
       GOPACKAGENAME: main
+      APP_URL: http://mosaic.cfapps.pez.pivotal.io

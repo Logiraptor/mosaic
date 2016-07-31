@@ -107,7 +107,7 @@ func (r *redditDownloader) imageFetcher(work <-chan job, wg *sync.WaitGroup, ima
 		if err != nil {
 			job.err <- err
 		} else {
-			job.success <- resize(image, imageSize)
+			job.success <- resize(crop(image, maxSquareInRect(image.Bounds())), imageSize)
 		}
 	}
 	wg.Done()
@@ -144,7 +144,7 @@ func (r *redditDownloader) loadSubredditPage(subreddit string, page int) []Post 
 
 func resize(img image.Image, imageSize image.Rectangle) image.Image {
 	output := image.NewRGBA(imageSize)
-	draw.BiLinear.Scale(output, imageSize, img, maxSquareInRect(img.Bounds()), draw.Over, nil)
+	draw.CatmullRom.Scale(output, imageSize, img, img.Bounds(), draw.Over, nil)
 	return output
 }
 
