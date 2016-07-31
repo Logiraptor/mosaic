@@ -34,7 +34,7 @@ func DownloadImages(imageLoader ImageLoader, subreddit string, n, size int) ([]i
 		jobs = make(chan job)
 	)
 
-	r := redditDownloader{
+	r := imgurDownloader{
 		imageLoader: imageLoader,
 	}
 
@@ -50,11 +50,11 @@ func DownloadImages(imageLoader ImageLoader, subreddit string, n, size int) ([]i
 	return images, nil
 }
 
-type redditDownloader struct {
+type imgurDownloader struct {
 	imageLoader ImageLoader
 }
 
-func (r *redditDownloader) loadPages(sub string, jobs chan<- job, total int) []image.Image {
+func (r *imgurDownloader) loadPages(sub string, jobs chan<- job, total int) []image.Image {
 	defer close(jobs)
 	var (
 		errs           = make(chan error, numWorkers)
@@ -101,7 +101,7 @@ type job struct {
 	success chan image.Image
 }
 
-func (r *redditDownloader) imageFetcher(work <-chan job, wg *sync.WaitGroup, imageSize image.Rectangle) {
+func (r *imgurDownloader) imageFetcher(work <-chan job, wg *sync.WaitGroup, imageSize image.Rectangle) {
 	for job := range work {
 		image, err := r.fetchImage(job.url)
 		if err != nil {
@@ -113,14 +113,14 @@ func (r *redditDownloader) imageFetcher(work <-chan job, wg *sync.WaitGroup, ima
 	wg.Done()
 }
 
-func (r *redditDownloader) fetchImage(url string) (image.Image, error) {
+func (r *imgurDownloader) fetchImage(url string) (image.Image, error) {
 	ending := regexp.MustCompile(`\.([a-z]{3})$`)
 	url = ending.ReplaceAllString(url, "s.$1")
 
 	return r.imageLoader.LoadImage(url)
 }
 
-func (r *redditDownloader) loadSubredditPage(subreddit string, page int) []Post {
+func (r *imgurDownloader) loadSubredditPage(subreddit string, page int) []Post {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.imgur.com/3/gallery/r/%s/top/%d.json", subreddit, page), nil)
 	if err != nil {
 		log.Fatal(err)
