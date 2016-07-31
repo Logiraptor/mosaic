@@ -27,3 +27,7 @@ _testmain.go
 *.test
 *.prof
 gin-bin
+
+
+.env
+mosaic

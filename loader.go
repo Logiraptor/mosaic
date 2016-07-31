@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"sync"
 
@@ -36,6 +37,7 @@ func DownloadImages(imageLoader ImageLoader, subreddit string, n, size int) ([]i
 
 	r := imgurDownloader{
 		imageLoader: imageLoader,
+		clientID:    os.Getenv("IMGUR_CLIENT_ID"),
 	}
 
 	wg.Add(numWorkers)
@@ -52,6 +54,7 @@ func DownloadImages(imageLoader ImageLoader, subreddit string, n, size int) ([]i
 
 type imgurDownloader struct {
 	imageLoader ImageLoader
+	clientID    string
 }
 
 func (r *imgurDownloader) loadPages(sub string, jobs chan<- job, total int) []image.Image {
@@ -59,7 +62,6 @@ func (r *imgurDownloader) loadPages(sub string, jobs chan<- job, total int) []im
 	var (
 		errs           = make(chan error, numWorkers)
 		success        = make(chan image.Image, numWorkers)
-		posts          []Post
 		submittedCount int
 		page           int
 
@@ -68,7 +70,12 @@ func (r *imgurDownloader) loadPages(sub string, jobs chan<- job, total int) []im
 
 outer:
 	for {
-		posts = r.loadSubredditPage(sub, page)
+		posts, err := r.loadSubredditPage(sub, page)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
 		page++
 		for _, p := range posts {
 			j := job{
@@ -116,30 +123,29 @@ func (r *imgurDownloader) imageFetcher(work <-chan job, wg *sync.WaitGroup, imag
 func (r *imgurDownloader) fetchImage(url string) (image.Image, error) {
 	ending := regexp.MustCompile(`\.([a-z]{3})$`)
 	url = ending.ReplaceAllString(url, "s.$1")
-
 	return r.imageLoader.LoadImage(url)
 }
 
-func (r *imgurDownloader) loadSubredditPage(subreddit string, page int) []Post {
+func (r *imgurDownloader) loadSubredditPage(subreddit string, page int) ([]Post, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.imgur.com/3/gallery/r/%s/top/%d.json", subreddit, page), nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Client-ID f6f766ba6e42aa6")
+	req.Header.Set("Authorization", "Client-ID "+r.clientID)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var sub SubReddit
 	err = json.NewDecoder(resp.Body).Decode(&sub)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return sub.Data
+	return sub.Data, nil
 }
 
 func resize(img image.Image, imageSize image.Rectangle) image.Image {
