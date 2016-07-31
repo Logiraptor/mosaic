@@ -80,7 +80,8 @@ func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	img, err := m.LoadImage(config.InputImageURL)
 	if err != nil {
-		log.Fatal(err)
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	config.TileSize = 25
@@ -92,12 +93,14 @@ func (m *MosaicGenerator) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	after, err := m.process(config, img)
 	if err != nil {
-		log.Fatal(err)
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	err = png.Encode(rw, after)
 	if err != nil {
-		log.Fatal(err)
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
 	}
 }
 

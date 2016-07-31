@@ -12,8 +12,8 @@ type ImageLoader interface {
 
 type webImageLoader struct{}
 
-func (webImageLoader) LoadImage(file string) (image.Image, error) {
-	resp, err := http.Get(file)
+func (webImageLoader) LoadImage(url string) (image.Image, error) {
+	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +21,7 @@ func (webImageLoader) LoadImage(file string) (image.Image, error) {
 
 	img, _, err := image.Decode(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %v", file, err)
+		return nil, fmt.Errorf("%s: %v", url, err)
 	}
 	return img, nil
 }
