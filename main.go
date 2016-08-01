@@ -158,22 +158,12 @@ func (c *ImageConfig) mosaic(strategy func(color.Color) image.Image, in image.Im
 
 	in = resize(in, image.Rect(0, 0, numTilesX, numTilesY))
 
-	output := image.NewRGBA(image.Rect(0, 0, numTilesX*c.TileSize, numTilesY*c.TileSize))
+	output := NewMosaic(numTilesX, numTilesY, c.TileSize)
 
 	parallelMap(numTilesX, func(i int) {
 		parallelMap(numTilesY, func(j int) {
-
 			result := strategy(in.At(i, j))
-
-			for x := 0; x < c.TileSize; x++ {
-				for y := 0; y < c.TileSize; y++ {
-
-					pX := i*c.TileSize + x
-					pY := j*c.TileSize + y
-
-					output.Set(pX, pY, result.At(x, y))
-				}
-			}
+			output.images[i][j] = result
 		})
 	})
 
